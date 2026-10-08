@@ -66,6 +66,25 @@ public final class MetalBridge {
 		Native.blitTextureToBuffer(enc, texture, 0, 0, 0, width, height, buffer, 0, width * bytesPerPixel);
 	}
 
+	/** Queue a level-zero readback on the game's encoder; callback owns the copied bytes.
+	 * Call between render passes. The native staging allocation is released after GPU completion. */
+	public static void readTextureAsync(Object encoder, long texture, int width, int height,
+		int bytesPerPixel, java.util.function.Consumer<byte[]> callback) {
+		MetalEncoder e = (MetalEncoder) encoder;
+		int size = Math.multiplyExact(Math.multiplyExact(width, height), bytesPerPixel);
+		long buffer = newBuffer(e.ctx, size);
+		try {
+			readTexture(e.enc, texture, width, height, bytesPerPixel, buffer);
+			e.afterGpuFinishes(() -> {
+				try {
+					byte[] bytes = new byte[size];
+					MemoryUtil.memByteBuffer(bufferContents(buffer), size).get(bytes);
+					callback.accept(bytes);
+				} finally { release(buffer); }
+			});
+		} catch (RuntimeException | Error failure) { release(buffer); throw failure; }
+	}
+
 	public static int pixelFormat(GpuFormat format) {
 		return MetalConst.pixelFormat(format);
 	}
