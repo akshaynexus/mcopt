@@ -85,7 +85,7 @@ public final class Cpu {
 
 	/** mc_cpu_flags' bits, with the pass lever as given. */
 	public static int nativeFlags(boolean pass) {
-		return (pass ? 1 : 0) | (CMD_AHEAD ? 2 : 0);
+		return (pass ? 1 : 0) | (CMD_AHEAD ? 2 : 0) | (Boolean.getBoolean("mcopt.metal.cacheTextures") ? 4 : 0);
 	}
 
 	/** pass=ab: time in the native pass begin, lever on odd frames. */

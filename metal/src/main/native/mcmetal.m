@@ -634,6 +634,7 @@ uint64_t mc_cadence_presented(int slot) { return __atomic_load_n(&cadencePresent
 // ---- profiling: GPU timestamps at every render encoder's stage boundaries, for one submit at a time ----
 
 static MTLTimestamp profileCpu0, profileGpu0;
+int mc_profile_count(Enc *enc) { return enc->sampleCount; }
 
 int mc_profile_begin(Enc *enc, int maxEncoders) {
 	id<MTLDevice> device = enc->ctx->device;
@@ -725,11 +726,12 @@ static int sameTargets(Enc *enc, int count, id<MTLTexture> const *colors, const 
 // (the pipeline is the same object: the table only remembers what clearPipelines returned, and clearPipelines never drops an
 // entry); mc_render_begin fills one kept MTLRenderPassDescriptor, every field it may hold reset, instead of a new one per pass
 // (Metal copies the descriptor when it makes the encoder).
-static int cpuPass;
+static int cpuPass, cacheTextureBindings;
 
 void mc_cpu_flags(int flags) {
 	cpuPass = flags & 1;
 	cpuAhead = flags >> 1 & 1;
+	cacheTextureBindings = flags & 4;
 }
 
 #define FOLD_SLOTS 16
@@ -805,6 +807,7 @@ static void foldDepthClear(Enc *enc, float depthValue, int width, int height) {
 
 // Opens `render` on rp (with the profiling timestamps, while profiling) at enc's viewport size.
 static void openRender(Enc *enc, MTLRenderPassDescriptor *rp) {
+	enc->textureBindingsValid = enc->samplerBindingsValid = 0;
 	if (enc->samples && enc->sampleCount + 4 <= (int) enc->samples.sampleCount) {
 		MTLRenderPassSampleBufferAttachmentDescriptor *s = rp.sampleBufferAttachments[0];
 		s.sampleBuffer = enc->samples;
@@ -963,12 +966,21 @@ void mc_r_bytes(Enc *enc, int index, const void *bytes, int length) {
 }
 
 void mc_r_texture(Enc *enc, int index, id<MTLTexture> texture, id<MTLSamplerState> sampler) {
-	[enc->render setVertexTexture:texture atIndex:index];
-	[enc->render setFragmentTexture:texture atIndex:index];
-	if (sampler) {
-		[enc->render setVertexSamplerState:sampler atIndex:index];
-		[enc->render setFragmentSamplerState:sampler atIndex:index];
-	}
+ int textureCached = cacheTextureBindings && index >= 0 && index < 32;
+ uint32_t bit = textureCached ? 1u << index : 0;
+ if (!textureCached || !(enc->textureBindingsValid & bit) || enc->boundTextures[index] != texture) {
+  [enc->render setVertexTexture:texture atIndex:index];
+  [enc->render setFragmentTexture:texture atIndex:index];
+  if (textureCached) { enc->boundTextures[index] = texture; enc->textureBindingsValid |= bit; }
+ }
+ if (sampler) {
+  int samplerCached = cacheTextureBindings && index >= 0 && index < 16;
+  if (!samplerCached || !(enc->samplerBindingsValid & bit) || enc->boundSamplers[index] != sampler) {
+   [enc->render setVertexSamplerState:sampler atIndex:index];
+   [enc->render setFragmentSamplerState:sampler atIndex:index];
+   if (samplerCached) { enc->boundSamplers[index] = sampler; enc->samplerBindingsValid |= bit; }
+  }
+ }
 }
 
 // Coordinates follow the GL row order established by the shared vertex-Y flip.

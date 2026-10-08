@@ -290,7 +290,10 @@ int mcl_cols_composite(LodCols *l, Enc *enc, int gbuffer, const void *frame, int
 	[r setFragmentBuffer:crowns offset:0 atIndex:26];
 	[r setFragmentBuffer:texWords offset:0 atIndex:27];
 	[r setFragmentBuffer:palette offset:0 atIndex:28];
-	[r setFragmentTexture:atlas atIndex:20];
+	// These direct bindings bypass mc_r_texture; invalidate both affected cache namespaces.
+ enc->textureBindingsValid &= ~((1u << 20) | (1u << 21));
+ enc->samplerBindingsValid &= ~(1u << 14);
+ [r setFragmentTexture:atlas atIndex:20];
 	[r setFragmentSamplerState:l->atlasSampler atIndex:14];
 	[r drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:0 vertexCount:6];
 	[r popDebugGroup];
@@ -477,7 +480,10 @@ int mcl_mesh_draw(LodCols *l, Enc *enc, int gbuffer, const void *comp, int compL
 	[r setFragmentBuffer:crowns offset:0 atIndex:26];
 	[r setFragmentBuffer:texWords offset:0 atIndex:27];
 	[r setFragmentBuffer:palette offset:0 atIndex:28];
-	[r setFragmentTexture:atlas atIndex:20];
+	// These direct bindings bypass mc_r_texture; invalidate both affected cache namespaces.
+ enc->textureBindingsValid &= ~((1u << 20) | (1u << 21));
+ enc->samplerBindingsValid &= ~(1u << 14);
+ [r setFragmentTexture:atlas atIndex:20];
 	[r setFragmentSamplerState:l->atlasSampler atIndex:14];
 	// the vertex stage's skirt feet: the tile table, the clipmap's words, MeshFrame
 	[r setVertexBuffer:table offset:0 atIndex:27];

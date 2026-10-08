@@ -35,6 +35,10 @@ typedef struct {
 	MTLPrimitiveType primitive;
 	id<MTLCounterSampleBuffer> samples;  // set only while profiling: 4 timestamps per render encoder (vertex start/end, fragment start/end)
 	int sampleCount;
+ // Redundant texture/sampler binds, valid only for the current native render encoder.
+ id<MTLTexture> boundTextures[32];
+ id<MTLSamplerState> boundSamplers[16];
+ uint32_t textureBindingsValid, samplerBindingsValid;
 	// Terrain culling only: a command buffer committed right before the frame's `cmd` (neither is enqueued earlier, so the
 	// queue runs pre first), so work recorded into it mid-frame (geometry uploads, culling) still runs on the GPU before
 	// anything in `cmd`. Opened by the frame's first use (mc_pre), so a frame without any has no second command buffer.

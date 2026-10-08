@@ -113,6 +113,7 @@ final class MetalEncoder implements CommandEncoderBackend {
 		if (this.currentPass != null) throw new IllegalStateException("Cannot submit inside a render pass");
 		this.trace("submit");
 		this.transientMemory.endSubmit();
+		PassProfile.Samples batch = PassProfile.end(this);
 		long samples = 0;
 		int sampleCount = 0;
 		if (profiled(this.submitIndex)) {
@@ -143,12 +144,14 @@ final class MetalEncoder implements CommandEncoderBackend {
 			int n = sampleCount;
 			this.afterThisFrame.add(() -> this.accumulateProfile(cmd, s, n));
 		}
+		if (batch != null) this.afterThisFrame.add(() -> PassProfile.read(this, cmd, batch));
 		this.inFlight.add(new Frame(this.submitIndex++, cmd, this.afterThisFrame));
 		if (mcopt.metal.cpu.Cpu.FENCE_STATS) mcopt.metal.cpu.Cpu.fenceTick(this.submitIndex); // opt-in
 		this.afterThisFrame = new ArrayList<>();
 		this.encoderIndex = 0;
 		if (this.submitIndex == MetalProbe.SUBMIT) this.probe = new MetalProbe();
 		if (profiled(this.submitIndex) && !Native.profileBegin(this.enc, 512)) System.out.println("mcopt-metal trace: no GPU timestamps on this device");
+		PassProfile.next(this);
 		while (this.inFlight.size() > MAX_IN_FLIGHT) this.retire(this.inFlight.poll());
 		if (STATS) this.stats();
 	}
@@ -303,6 +306,7 @@ final class MetalEncoder implements CommandEncoderBackend {
 			if (keptDelegate != null) keptDelegate.begin(this.enc, depthHandle != 0);
 			MetalHooks.Labeler labeler = MetalHooks.labeler;
 			if (labeler != null && continued == 0) labeler.label(this.enc, "game " + descriptor.label().get());
+			if (continued == 0 && PassProfile.active()) PassProfile.label(this.enc, "game " + descriptor.label().get());
 			if (this.submitIndex == TRACE_SUBMIT) {
 				StringBuilder targets = new StringBuilder();
 				for (int i = 0; i < colors.size(); i++) {

@@ -56,6 +56,7 @@ final class Native {
 	private static final MethodHandle POOL_ADD = fn("mc_pool_add", false, JAVA_INT, JAVA_LONG, JAVA_LONG, JAVA_INT);
 	private static final MethodHandle POOL_TAKE = fn("mc_pool_take", false, JAVA_LONG, JAVA_LONG, JAVA_LONG);
 	private static final MethodHandle BUFFER_LENGTH = fn("mc_buffer_length", true, JAVA_LONG, JAVA_LONG);
+	private static final MethodHandle PROFILE_COUNT = fn("mc_profile_count", true, JAVA_INT, JAVA_LONG);
 	private static final MethodHandle PROFILE_BEGIN = fn("mc_profile_begin", false, JAVA_INT, JAVA_LONG, JAVA_INT);
 	private static final MethodHandle PROFILE_END = fn("mc_profile_end", false, JAVA_LONG, JAVA_LONG, JAVA_LONG);
 	private static final MethodHandle PROFILE_READ = fn("mc_profile_read", false, null, JAVA_LONG, JAVA_LONG, JAVA_INT, JAVA_LONG);
@@ -180,6 +181,7 @@ final class Native {
 	static boolean poolAdd(long ctx, long size, int delayMs) { try { return (int) POOL_ADD.invokeExact(ctx, size, delayMs) != 0; } catch (Throwable t) { throw rethrow(t); } }
 	static long poolTake(long minLength, long maxLength) { try { return (long) POOL_TAKE.invokeExact(minLength, maxLength); } catch (Throwable t) { throw rethrow(t); } }
 	static long bufferLength(long buffer) { try { return (long) BUFFER_LENGTH.invokeExact(buffer); } catch (Throwable t) { throw rethrow(t); } }
+	static int profileCount(long enc) { try { return (int) PROFILE_COUNT.invokeExact(enc); } catch (Throwable t) { throw rethrow(t); } }
 	static boolean profileBegin(long enc, int maxEncoders) { try { return (int) PROFILE_BEGIN.invokeExact(enc, maxEncoders) != 0; } catch (Throwable t) { throw rethrow(t); } }
 	static long profileEnd(long enc, long countOut) { try { return (long) PROFILE_END.invokeExact(enc, countOut); } catch (Throwable t) { throw rethrow(t); } }
 	static void profileRead(long ctx, long samples, int count, long out) { try { PROFILE_READ.invokeExact(ctx, samples, count, out); } catch (Throwable t) { throw rethrow(t); } }
