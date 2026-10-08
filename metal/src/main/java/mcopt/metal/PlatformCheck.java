@@ -11,11 +11,15 @@ import net.fabricmc.loader.impl.util.log.LogCategory;
  * on startup!" with the reason buried in a stack trace. -Dmcopt.platformCheck.fake=linux (or x86_64, or a macOS
  * version like 15.5) pretends to be that platform, to test the message.
  */
-final class PlatformCheck {
+public final class PlatformCheck {
 	private PlatformCheck() {
 	}
 
-	static void run() {
+	public static boolean isSupported() {
+		return currentProblem() == null;
+	}
+
+	private static String currentProblem() {
 		String os = System.getProperty("os.name", ""), arch = System.getProperty("os.arch", ""), version = System.getProperty("os.version", "");
 		String fake = System.getProperty("mcopt.platformCheck.fake");
 		if (fake != null) {
@@ -23,7 +27,11 @@ final class PlatformCheck {
 			else if (fake.equals("x86_64") || fake.equals("amd64")) arch = fake;
 			else os = fake;
 		}
-		String problem = problem(os, arch, version);
+		return problem(os, arch, version);
+	}
+
+	static void run() {
+		String problem = currentProblem();
 		if (problem == null) return;
 		String message = "mcopt Metal can't run here. " + problem
 			+ " To play on this computer, remove the mcopt-metal jar from the mods folder.";

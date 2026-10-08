@@ -16,7 +16,8 @@ import java.util.TreeMap;
  * <li>{@code -Dmcopt.profile=NAME}, or {@code profile=NAME} in {@code <game dir>/config/mcopt.properties}, applies
  * the jar's {@code /mcopt/profiles/NAME.properties} (e.g. {@code recommended}: the measured, accepted wins).</li>
  * <li>Any {@code mcopt.*} key in config/mcopt.properties is applied too, and wins over the profile's value.</li>
- * <li>A flag given on the command line wins over both: a key is only set when System.getProperty(key) is still null.</li>
+ * <li>A flag given on the command line wins over both, except an explicit in-game graphicsBackend=metal selection
+ * overrides mcopt.metal before flags and OpenGL-only mod detection run.</li>
  * </ul>
  * With no profile named anywhere, {@code alpha} applies (the perf-only set); {@code profile=none} applies no profile,
  * exactly the old no-profile behaviour. If config/mcopt.properties is absent it is written with the effective profile ({@code alpha}, or what -Dmcopt.profile names)
@@ -75,6 +76,8 @@ public final class Profile {
 				System.out.println("[mcopt] profile: can't read " + cfg + ": " + e);
 			}
 		}
+		// An explicit in-game selection persists across launches, including launcher -Dmcopt.metal=false.
+		if ("metal".equals(file.getProperty("graphicsBackend"))) System.setProperty("mcopt.metal", "true");
 		String name = System.getProperty("mcopt.profile", file.getProperty("profile", "")).trim();
 		if (name.isEmpty()) name = DEFAULT;
 		if (!Files.exists(cfg)) writeDefault(cfg, name); // first launch: record the effective profile (none stays none)
@@ -163,6 +166,25 @@ public final class Profile {
 		} catch (IOException e) {
 			System.out.println("[mcopt] profile: can't write " + cfg + ": " + e);
 		}
+	}
+
+	/** Persist the UI selection. Remove graphicsBackend to restore command-line precedence. */
+	public static void selectMetal() throws IOException {
+		if (!PlatformCheck.isSupported()) throw new IOException("Metal is not supported on this platform");
+		Path cfg = gameDir().resolve("config").resolve("mcopt.properties");
+		Properties settings = new Properties();
+		if (Files.exists(cfg)) {
+			try (Reader reader = Files.newBufferedReader(cfg, StandardCharsets.UTF_8)) {
+				settings.load(reader);
+			}
+		}
+		settings.setProperty("mcopt.metal", "true");
+		settings.setProperty("graphicsBackend", "metal");
+		Files.createDirectories(cfg.getParent());
+		try (var writer = Files.newBufferedWriter(cfg, StandardCharsets.UTF_8)) {
+			settings.store(writer, "mcopt settings. graphicsBackend=metal overrides launcher mcopt.metal; remove it to restore launcher precedence.");
+		}
+		// Do not change this process's backend flags: the live renderer cannot be switched.
 	}
 
 	private static Path gameDir() {
