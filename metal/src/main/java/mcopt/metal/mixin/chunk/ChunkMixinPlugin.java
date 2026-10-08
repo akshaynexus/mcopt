@@ -13,7 +13,8 @@ import org.spongepowered.asm.mixin.extensibility.IMixinInfo;
  * Each chunk mixin applies only when its -Dmcopt.chunk.* switch is set (ChunkOpt.mixinEnabled), so by default nothing changes.
  * Mixins that rewrite methods other optimization mods also rewrite step aside when such a mod is loaded (that mod's version of
  * the optimization then applies): Lithium (POI scans, random ticks, chunk access), ScalableLux (the light engine), C2ME (chunk
- * IO, serialization, chunk access).
+ * IO, serialization, chunk access), Iris (BlockRenderer.renderModel: Iris injects into it for shader-pack transparency, and
+ * the overwrite leaves nothing for that injection to bind to).
  */
 public final class ChunkMixinPlugin implements IMixinConfigPlugin {
 	static {
@@ -21,6 +22,7 @@ public final class ChunkMixinPlugin implements IMixinConfigPlugin {
 	}
 	private static final Map<String, List<String>> YIELDS_TO = Map.of(
 		"AcquirePoiMixin", List.of("lithium"),
+		"BlockRendererMixin", List.of("iris"),
 		"ServerLevelTickMixin", List.of("lithium"),
 		"ChunkAccessSectionMixin", List.of("lithium", "c2me"),
 		"DataLayerStorageMapMixin", List.of("scalablelux"),

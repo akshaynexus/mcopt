@@ -86,6 +86,7 @@ final class MetalRenderPass implements RenderPassBackend {
 		if (this.delegate != null) {
 			this.pipeline = p;
 			this.slots = this.delegate.setPipeline(this.enc, p, p.uniforms);
+			if (this.delegate.takeEncoderRestart()) this.rebindGeometry();
 			Arrays.fill(this.pending, 0, p.uniforms.size(), null);
 			Arrays.fill(this.bound, null);
 			this.dirtyUpTo = p.uniforms.size();
@@ -112,6 +113,7 @@ final class MetalRenderPass implements RenderPassBackend {
 		if (p == null) return;
 		if (this.delegate != null) {
 			this.slots = this.delegate.setPipeline(this.enc, p, p.uniforms);
+			if (this.delegate.takeEncoderRestart()) this.rebindGeometry();
 			return;
 		}
 		Native.pipeline(this.enc, this.hasDepth ? p.withDepth : p.withoutDepth, p.depthState, p.cull ? 1 : 0, p.wireframe ? 1 : 0, p.depthBiasConstant, p.depthBiasSlope, p.primitive);
@@ -149,6 +151,11 @@ final class MetalRenderPass implements RenderPassBackend {
 		Arrays.fill(this.bound, null);
 		this.dirtyUpTo = Objects.requireNonNull(this.pipeline).uniforms.size();
 		this.bindUniforms(0);
+		this.rebindGeometry();
+	}
+
+	private void rebindGeometry() {
+		if (this.indexHandle != 0) Native.index(this.enc, this.indexHandle, this.indexInt);
 		Native.scissor(this.enc, this.scissor[0], this.scissor[1], this.scissor[2], this.scissor[3]);
 		for (int slot = 0; slot < this.vertexBuffers.length; slot++) {
 			GpuBufferSlice vb = this.vertexBuffers[slot];

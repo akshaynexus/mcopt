@@ -5,7 +5,7 @@ import org.jspecify.annotations.Nullable;
 
 /**
  * The backend's seams for redirecting and labelling render passes: inert unless something installs a redirector or a
- * labeler, which nothing in this build does.
+ * labeler. Iris installs a redirector while a Metal shader pack is active.
  */
 public final class MetalHooks {
 	/**

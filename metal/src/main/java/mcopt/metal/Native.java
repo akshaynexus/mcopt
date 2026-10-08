@@ -67,6 +67,7 @@ final class Native {
 		JAVA_LONG, JAVA_LONG, JAVA_INT, JAVA_INT, JAVA_INT, JAVA_INT, JAVA_INT, JAVA_LONG, JAVA_LONG, JAVA_INT);
 	private static final MethodHandle BLIT_TEXTURE_TO_TEXTURE = fn("mc_blit_texture_to_texture", false, null,
 		JAVA_LONG, JAVA_LONG, JAVA_LONG, JAVA_INT, JAVA_INT, JAVA_INT, JAVA_INT, JAVA_INT, JAVA_INT, JAVA_INT);
+	private static final MethodHandle GENERATE_MIPMAPS = fn("mc_generate_mipmaps", false, null, JAVA_LONG, JAVA_LONG);
 	private static final MethodHandle RENDER_BEGIN = fn("mc_render_begin", false, JAVA_INT,
 		JAVA_LONG, JAVA_INT, JAVA_LONG, JAVA_LONG, JAVA_LONG, JAVA_INT, JAVA_FLOAT, JAVA_INT, JAVA_INT);
 	private static final MethodHandle DISCARD = fn("mc_discard", true, null, JAVA_LONG, JAVA_LONG);
@@ -75,6 +76,8 @@ final class Native {
 	private static final MethodHandle R_VERTEX_BUFFER = fn("mc_r_vertex_buffer", true, null, JAVA_LONG, JAVA_INT, JAVA_LONG, JAVA_LONG);
 	private static final MethodHandle R_BYTES = fn("mc_r_bytes", true, null, JAVA_LONG, JAVA_INT, JAVA_LONG, JAVA_INT);
 	private static final MethodHandle R_TEXTURE = fn("mc_r_texture", true, null, JAVA_LONG, JAVA_INT, JAVA_LONG, JAVA_LONG);
+	private static final MethodHandle SAMPLER_COMPARE_NEW = fn("mc_sampler_compare_new", false, JAVA_LONG, JAVA_LONG, JAVA_INT, JAVA_INT, JAVA_INT, JAVA_INT, JAVA_INT, JAVA_INT, JAVA_FLOAT, JAVA_INT);
+	private static final MethodHandle R_VIEWPORT = fn("mc_r_viewport", true, null, JAVA_LONG, JAVA_INT, JAVA_INT, JAVA_INT, JAVA_INT);
 	private static final MethodHandle R_SCISSOR = fn("mc_r_scissor", true, null, JAVA_LONG, JAVA_INT, JAVA_INT, JAVA_INT, JAVA_INT);
 	private static final MethodHandle R_INDEX = fn("mc_r_index", true, null, JAVA_LONG, JAVA_LONG, JAVA_INT);
 	private static final MethodHandle R_USE = fn("mc_r_use", true, null, JAVA_LONG, JAVA_LONG);
@@ -146,6 +149,9 @@ final class Native {
 	static long create(long name, int nameCap, long err, int errCap) { try { return (long) CREATE.invokeExact(name, nameCap, err, errCap); } catch (Throwable t) { throw rethrow(t); } }
 	static long maxBufferLength(long ctx) { try { return (long) MAX_BUFFER_LENGTH.invokeExact(ctx); } catch (Throwable t) { throw rethrow(t); } }
 	static void release(long obj) { try { RELEASE.invokeExact(obj); } catch (Throwable t) { throw rethrow(t); } }
+	static long samplerCompareNew(long ctx, int u, int v, int min, int mag, int mip, int aniso, float maxLod, int compare) { try { return (long) SAMPLER_COMPARE_NEW.invokeExact(ctx, u, v, min, mag, mip, aniso, maxLod, compare); } catch (Throwable t) { throw rethrow(t); } }
+	static void viewport(long enc, int x, int y, int w, int h) { try { R_VIEWPORT.invokeExact(enc, x, y, w, h); } catch (Throwable t) { throw rethrow(t); } }
+	static void generateMipmaps(long enc, long texture) { try { GENERATE_MIPMAPS.invokeExact(enc, texture); } catch (Throwable t) { throw rethrow(t); } }
 	static long bufferNew(long ctx, long size) { try { return (long) BUFFER_NEW.invokeExact(ctx, size); } catch (Throwable t) { throw rethrow(t); } }
 	static long bufferPrivate(long ctx, long src, long size) { try { return (long) BUFFER_PRIVATE.invokeExact(ctx, src, size); } catch (Throwable t) { throw rethrow(t); } }
 	static long bufferContents(long buffer) { try { return (long) BUFFER_CONTENTS.invokeExact(buffer); } catch (Throwable t) { throw rethrow(t); } }

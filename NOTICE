@@ -26,3 +26,9 @@ Sodium (https://github.com/CaffeineMC/sodium)
     metal/src/main/java/mcopt/metal/cpu/CullReuse.java
     metal/src/main/native/mcprobe.m
     metal/src/main/native/mcterrain.m
+
+Shader-pack integration: PackGlsl.java, PackCompiler.java, PackProgram.java,
+PackUniforms.java and MetalShaderTranslation.java derive from the local Iris
+Metal port and are licensed LGPL-3.0-only, rather than the surrounding mcopt
+license. The LGPL license text is included as LICENSE-IRIS-LGPL-3.0.
+No glsl-transformer code is copied or bundled in mcopt by this integration.

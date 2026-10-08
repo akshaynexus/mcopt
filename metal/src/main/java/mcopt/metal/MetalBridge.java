@@ -213,6 +213,155 @@ public final class MetalBridge {
 		return ((MetalEncoder) encoder).inRenderPass();
 	}
 
+	// --- Shaderpack runtime (the Iris fork's net.irisshaders.iris.metal): its own pipelines, drawn into the backend's encoder. ---
+
+	/** The live device's encoder (the object encoder() returns), or null before the Metal device exists. */
+	public static @Nullable Object encoder() {
+		MetalDevice d = MetalDevice.instance;
+		return d == null ? null : d.encoder();
+	}
+
+	/** The live device's Metal context. */
+	public static long ctx() {
+		return java.util.Objects.requireNonNull(MetalDevice.instance, "Metal device").ctx();
+	}
+
+	/** Whether the frontend has a render pass open on encoder: native draws must not interleave with one. */
+	public static boolean frontendPassOpen(Object encoder) {
+		return ((MetalEncoder) encoder).inRenderPass();
+	}
+
+	/** A Metal library from MSL source; throws with the compiler's message on failure. */
+	public static long libraryNew(long ctx, String msl) {
+		try (MemoryStack stack = MemoryStack.stackPush()) {
+			long err = stack.nmalloc(1, 8192);
+			MemoryUtil.memPutByte(err, (byte) 0);
+			// Off-heap: a shaderpack's MSL is often bigger than the 64 KiB MemoryStack.
+			java.nio.ByteBuffer source = MemoryUtil.memUTF8(msl);
+			try {
+				long lib = Native.libraryNew(ctx, MemoryUtil.memAddress(source), err, 8192);
+				if (lib == 0) throw new IllegalStateException(MemoryUtil.memUTF8(err));
+				return lib;
+			} finally {
+				MemoryUtil.memFree(source);
+			}
+		}
+	}
+
+	/**
+	 * A render pipeline state. desc is mc_pipeline_new's layout (see mcmetal.m): vertex buffers {slot, stride, stepRate},
+	 * attributes {location, buffer slot, offset, MTLVertexFormat}, colors {MTLPixelFormat, write mask, blend on, 6 blend
+	 * values}, depth MTLPixelFormat (0 none), MTLPrimitiveTopologyClass. Buffer slots here are Metal slots (use
+	 * vertexBufferSlot). Throws with Metal's message on failure.
+	 */
+	public static long pipelineNew(long ctx, long vlib, String vname, long flib, String fname, int[] desc) {
+		try (MemoryStack stack = MemoryStack.stackPush()) {
+			long err = stack.nmalloc(1, 8192);
+			MemoryUtil.memPutByte(err, (byte) 0);
+			java.nio.IntBuffer d = stack.mallocInt(desc.length).put(desc).flip();
+			long pso = Native.pipelineNew(ctx, vlib, MemoryUtil.memAddress(stack.UTF8(vname)), flib, MemoryUtil.memAddress(stack.UTF8(fname)),
+				MemoryUtil.memAddress(d), err, 8192);
+			if (pso == 0) throw new IllegalStateException(MemoryUtil.memUTF8(err));
+			return pso;
+		}
+	}
+
+	/** MTLDepthStencilState for an MTLCompareFunction (see compare) and depth writes on or off. */
+	public static long depthStateNew(long ctx, int compare, boolean write) {
+		return Native.depthStateNew(ctx, compare, write ? 1 : 0);
+	}
+
+	/** MTLSamplerState: address 0 clamp-to-edge, 2 repeat; filter 0 nearest, 1 linear; mip 0 none, 1 nearest, 2 linear. */
+	public static long comparisonSamplerNew(long ctx, int addressU, int addressV, int minFilter, int magFilter, int mipFilter, float maxLod, int compare) {
+		return Native.samplerCompareNew(ctx, addressU, addressV, minFilter, magFilter, mipFilter, 1, maxLod, compare);
+	}
+
+	public static long samplerNew(long ctx, int addressU, int addressV, int minFilter, int magFilter, int mipFilter, float maxLod) {
+		return Native.samplerNew(ctx, addressU, addressV, minFilter, magFilter, mipFilter, 1, maxLod);
+	}
+
+	/** A private 2D texture of a raw MTLPixelFormat; usage is MTLTextureUsage (ShaderRead 1, ShaderWrite 2, RenderTarget 4). */
+	public static long newTexture(long ctx, int mtlPixelFormat, int width, int height, int mips, int usage) {
+		return Native.textureNew(ctx, mtlPixelFormat, width, height, 1, mips, usage, 0);
+	}
+
+	/** The Metal buffer slot a frontend vertex buffer slot is bound at. */
+	public static int vertexBufferSlot(int slot) {
+		return MetalConst.VERTEX_BUFFER_BASE + slot;
+	}
+
+	/** The first Metal buffer slot the frontend never uses for uniforms (push constants and vertex buffers sit above). */
+	public static int firstReservedBufferSlot() {
+		return MetalConst.PUSH_CONSTANTS_INDEX;
+	}
+
+    /** Bind an unmodified device program when a redirected pass restores its original attachments. */
+    public static void bindDevicePipeline(long enc, Object backend, boolean hasDepth) {
+        MetalPipeline p = (MetalPipeline) backend;
+        Native.pipeline(enc, hasDepth ? p.withDepth : p.withoutDepth, p.depthState, p.cull ? 1 : 0,
+            p.wireframe ? 1 : 0, p.depthBiasConstant, p.depthBiasSlope, p.primitive);
+    }
+
+	public static void bindPipeline(long enc, long pso, long depthState, boolean cull, int primitive) {
+		Native.pipeline(enc, pso, depthState, cull ? 1 : 0, 0, 0, 0, primitive);
+	}
+
+	public static void bindPipeline(long enc, long pso, long depthState, boolean cull, float depthBiasConstant, float depthBiasSlope, int primitive) {
+		Native.pipeline(enc, pso, depthState, cull ? 1 : 0, 0, depthBiasConstant, depthBiasSlope, primitive);
+	}
+
+	/** setVertexBytes and setFragmentBytes at slot (at most 4 KiB). */
+	public static void bytes(long enc, int slot, long address, int length) {
+		Native.bytes(enc, slot, address, length);
+	}
+
+	/** A texture (and sampler, 0 for none) at slot, for both stages. */
+	public static void texture(long enc, int slot, long texture, long sampler) {
+		Native.texture(enc, slot, texture, sampler);
+	}
+
+	public static void buffer(long enc, int slot, long buffer, long offset) {
+		Native.buffer(enc, slot, buffer, offset);
+	}
+
+	/** The buffer behind a frontend slice, marked as used by the submit being recorded. */
+	public static long useBuffer(Object encoder, GpuBuffer buffer) {
+		return ((MetalEncoder) encoder).use(buffer).handle;
+	}
+
+	public static void draw(long enc, int vertexCount, int instanceCount, int firstVertex, int firstInstance) {
+		Native.draw(enc, vertexCount, instanceCount, firstVertex, firstInstance);
+	}
+
+	public static void scissor(long enc, int x, int y, int width, int height) {
+		Native.scissor(enc, x, y, width, height);
+	}
+
+	/** Set viewport after renderBegin; integer truncation is the caller's policy. */
+	public static void viewport(long enc, int x, int y, int width, int height) {
+		Native.viewport(enc, x, y, width, height);
+	}
+
+	public static void generateMipmaps(long enc, long texture) {
+		Native.generateMipmaps(enc, texture);
+	}
+
+	/** What the frontend asked for when it built backendPipeline (vertex layout, uniforms, targets), or null if it isn't a Metal pipeline. */
+	public static com.mojang.renderpearl.backend.api.BackendRenderPipeline.@Nullable CreateInfo createInfo(Object backendPipeline) {
+		return backendPipeline instanceof MetalPipeline p ? p.info : null;
+	}
+
+	/** The MTLCompareFunction the backend pipeline tests depth with (7 always when it has no depth state). */
+	public static int depthCompare(Object backendPipeline) {
+		return ((MetalPipeline) backendPipeline).depthCompare;
+	}
+
+	/** The texture and sampler handles behind a frontend combined image sampler value (a TextureViewAndSampler). */
+	public static long[] textureAndSampler(Object value) {
+		var ts = (com.mojang.renderpearl.util.TextureViewAndSampler) value;
+		return new long[] {((MetalTexture.View) ts.view()).handle, ((MetalSampler) ts.sampler()).handle()};
+	}
+
 	public static void release(long handle) {
 		Native.release(handle);
 	}

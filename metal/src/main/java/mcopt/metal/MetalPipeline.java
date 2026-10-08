@@ -22,7 +22,6 @@ import org.lwjgl.PointerBuffer;
 import org.lwjgl.system.MemoryStack;
 import org.lwjgl.system.MemoryUtil;
 import org.lwjgl.util.spvc.Spv;
-import org.lwjgl.util.spvc.SpvcMslResourceBinding;
 
 import static org.lwjgl.util.spvc.Spvc.*;
 
@@ -47,11 +46,14 @@ final class MetalPipeline implements BackendRenderPipeline {
 	final int depthCompare;
 	/** Sodium solid/cutout terrain only, with MetalTerrain on: the same pipeline fetching its own vertices; 0 otherwise. */
 	final long pulled;
+	/** What the frontend asked for: the shaderpack runtime builds its replacement from the same vertex layout. */
+	final CreateInfo info;
 	private final MetalEncoder encoder;
 	private boolean closed;
 
 	private MetalPipeline(MetalEncoder encoder, long withDepth, long withoutDepth, long pulled, long depthState, int depthCompare, CreateInfo info) {
 		this.encoder = encoder;
+		this.info = info;
 		this.withDepth = withDepth;
 		this.withoutDepth = withoutDepth;
 		this.pulled = pulled;
@@ -254,6 +256,12 @@ final class MetalPipeline implements BackendRenderPipeline {
 	private static String mslSalt() {
 		try (java.io.InputStream in = MetalPipeline.class.getResourceAsStream("MetalPipeline.class")) {
 			byte[] code = in.readAllBytes();
+            try (var shared = MetalShaderTranslation.class.getResourceAsStream("MetalShaderTranslation.class")) {
+                byte[] extra = shared.readAllBytes();
+                byte[] joined = java.util.Arrays.copyOf(code, code.length + extra.length);
+                System.arraycopy(extra, 0, joined, code.length, extra.length);
+                code = joined;
+            }
 			return "mcopt-msl-1|" + java.util.HexFormat.of().formatHex(java.security.MessageDigest.getInstance("SHA-256").digest(code))
 				+ "|" + org.lwjgl.Version.getVersion();
 		} catch (Exception e) {
@@ -302,48 +310,19 @@ final class MetalPipeline implements BackendRenderPipeline {
 	}
 
 	private static Translated translateNow(SpvModule module, int uniformCount) {
-		boolean vertex = module.type() == ShaderType.VERTEX;
-		int model = vertex ? Spv.SpvExecutionModelVertex : Spv.SpvExecutionModelFragment;
-		IntBuffer spirv = module.spv().asIntBuffer();
-		try (MemoryStack stack = MemoryStack.stackPush()) {
-			PointerBuffer out = stack.callocPointer(1);
-			check(0, spvc_context_create(out), "context");
-			long context = out.get(0);
-			try {
-				check(context, spvc_context_parse_spirv(context, spirv, spirv.remaining(), out), "parse");
-				long ir = out.get(0);
-				check(context, spvc_context_create_compiler(context, SPVC_BACKEND_MSL, ir, SPVC_CAPTURE_MODE_TAKE_OWNERSHIP, out), "compiler");
-				long compiler = out.get(0);
-				check(context, spvc_compiler_create_compiler_options(compiler, out), "options");
-				long options = out.get(0);
-				spvc_compiler_options_set_uint(options, SPVC_COMPILER_OPTION_MSL_VERSION, 30000);
-				spvc_compiler_options_set_uint(options, SPVC_COMPILER_OPTION_MSL_PLATFORM, SPVC_MSL_PLATFORM_MACOS);
-				spvc_compiler_options_set_bool(options, SPVC_COMPILER_OPTION_MSL_TEXTURE_BUFFER_NATIVE, true);
-				if (vertex) spvc_compiler_options_set_bool(options, SPVC_COMPILER_OPTION_FLIP_VERTEX_Y, true);
-				check(context, spvc_compiler_install_compiler_options(compiler, options), "install options");
-				for (int i = 0; i < uniformCount; i++) bind(stack, compiler, model, 0, i, i);
-				bind(stack, compiler, model, SPVC_MSL_PUSH_CONSTANT_DESC_SET, SPVC_MSL_PUSH_CONSTANT_BINDING, MetalConst.PUSH_CONSTANTS_INDEX);
-				check(context, spvc_compiler_compile(compiler, out), "compile");
-				String msl = MemoryUtil.memUTF8(out.get(0));
-				return new Translated(msl, spvc_compiler_get_cleansed_entry_point_name(compiler, "main", model));
-			} finally {
-				spvc_context_destroy(context);
-			}
-		}
-	}
-
-	private static void bind(MemoryStack stack, long compiler, int model, int set, int binding, int slot) {
-		SpvcMslResourceBinding b = SpvcMslResourceBinding.calloc(stack);
-		spvc_msl_resource_binding_init(b);
-		b.stage(model).desc_set(set).binding(binding).msl_buffer(slot).msl_texture(slot).msl_sampler(slot);
-		spvc_compiler_msl_add_resource_binding(compiler, b);
-	}
-
-	private static void check(long context, int result, String step) {
-		if (result != 0) {
-			throw new IllegalStateException("SPIRV-Cross " + step + " failed: " + (context != 0 ? spvc_context_get_last_error_string(context) : result));
-		}
-	}
+        boolean vertex = module.type() == ShaderType.VERTEX;
+        int model = vertex ? Spv.SpvExecutionModelVertex : Spv.SpvExecutionModelFragment;
+        return MetalShaderTranslation.withCompiler(module.spv(), (stack, context, compiler) -> {
+            MetalShaderTranslation.options(stack, context, compiler, vertex);
+            for (int i = 0; i < uniformCount; i++) {
+                MetalShaderTranslation.bind(stack, context, compiler, model, 0, i, i);
+            }
+            MetalShaderTranslation.bind(stack, context, compiler, model, SPVC_MSL_PUSH_CONSTANT_DESC_SET,
+                SPVC_MSL_PUSH_CONSTANT_BINDING, MetalConst.PUSH_CONSTANTS_INDEX);
+            var result = MetalShaderTranslation.finish(stack, context, compiler, model);
+            return new Translated(result.msl(), result.entry());
+        });
+    }
 
 	@Override
 	public boolean isClosed() {

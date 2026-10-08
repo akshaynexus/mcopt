@@ -46,6 +46,8 @@ final class MetalDevice implements GpuDeviceBackend {
 	private final long ctx;
 	private final MetalEncoder encoder;
 	private final DeviceInfo info;
+	/** The live device, for MetalBridge (the shaderpack runtime reaches the backend's encoder through it). */
+	static volatile @Nullable MetalDevice instance;
 
 	MetalDevice() throws BackendCreationException {
 		try (MemoryStack stack = MemoryStack.stackPush()) {
@@ -62,6 +64,7 @@ final class MetalDevice implements GpuDeviceBackend {
 				DeviceType.INTEGRATED);
 		}
 		this.encoder = new MetalEncoder(this.ctx);
+		instance = this;
 		// -Dmcopt.metal.cbdiag=MS: stall diagnostics on stderr (big buffer allocations, slow command buffers); see mcmetal.m.
 		String diag = System.getProperty("mcopt.metal.cbdiag");
 		if (diag != null) Native.diagEnable(Double.parseDouble(diag));
@@ -83,6 +86,14 @@ final class MetalDevice implements GpuDeviceBackend {
 	@Override
 	public GpuSurfaceBackend createSurface(long windowHandle, BooleanSupplier isIconified) {
 		return new MetalSurface(this.ctx, this.encoder, windowHandle);
+	}
+
+	MetalEncoder encoder() {
+		return this.encoder;
+	}
+
+	long ctx() {
+		return this.ctx;
 	}
 
 	@Override

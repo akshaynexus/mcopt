@@ -17,6 +17,9 @@ public interface PassDelegate {
 	 */
 	int @Nullable [] setPipeline(long enc, Object pipeline, List<BindGroupLayout.UniformDescription> uniforms);
 
+	/** True when setPipeline reopened the native render encoder and geometry state must be restored. */
+	default boolean takeEncoderRestart() { return false; }
+
 	/** The pass began on the native encoder enc, with or without a depth attachment. */
 	default void begin(long enc, boolean hasDepth) {
 	}

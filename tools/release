@@ -20,7 +20,7 @@ name=mcopt-metal-$version
 rm -rf "dist/$name" "dist/$name.zip"
 mkdir -p "dist/$name"
 cp "$jar" "dist/$name/$name.jar"
-cp LICENSE NOTICE "dist/$name/"
+cp LICENSE NOTICE LICENSE-IRIS-LGPL-3.0 "dist/$name/"
 sed "s/@VERSION@/$version/g" RELEASE-README.txt > "dist/$name/README.txt"
 (cd dist && zip -qrX "$name.zip" "$name")
 echo "dist/$name.zip"

@@ -338,6 +338,21 @@ id<MTLSamplerState> mc_sampler_new(Ctx *ctx, int addressU, int addressV, int min
 	}
 }
 
+id<MTLSamplerState> mc_sampler_compare_new(Ctx *ctx, int addressU, int addressV, int minFilter, int magFilter, int mipFilter, int anisotropy, float maxLod, int compare) {
+	@autoreleasepool {
+		MTLSamplerDescriptor *d = [[MTLSamplerDescriptor new] autorelease];
+		d.sAddressMode = (MTLSamplerAddressMode) addressU;
+		d.tAddressMode = (MTLSamplerAddressMode) addressV;
+		d.minFilter = (MTLSamplerMinMagFilter) minFilter;
+		d.magFilter = (MTLSamplerMinMagFilter) magFilter;
+		d.mipFilter = (MTLSamplerMipFilter) mipFilter;
+		d.maxAnisotropy = anisotropy;
+		d.lodMaxClamp = maxLod;
+		d.compareFunction = (MTLCompareFunction) compare;
+		return [ctx->device newSamplerStateWithDescriptor:d];
+	}
+}
+
 // ---- pipelines ----
 
 id<MTLLibrary> mc_library_new(Ctx *ctx, const char *source, char *err, int errCap) {
@@ -375,6 +390,11 @@ id<MTLRenderPipelineState> mc_pipeline_new(Ctx *ctx, id<MTLLibrary> vlib, const 
 			if (desc[i + 2] > 0) {
 				l.stepFunction = MTLVertexStepFunctionPerInstance;
 				l.stepRate = desc[i + 2];
+			} else if (desc[i + 2] < 0) {
+				// The shaderpack runtime: one value for every vertex (an attribute the game's format doesn't have).
+				l.stepFunction = MTLVertexStepFunctionConstant;
+				l.stepRate = 0;
+				l.stride = 0;
 			}
 		}
 		int attributes = desc[i++];
@@ -682,6 +702,11 @@ void mc_blit_texture_to_buffer(Enc *enc, id<MTLTexture> src, int mip, int x, int
 		toBuffer:dst destinationOffset:offset destinationBytesPerRow:bytesPerRow destinationBytesPerImage:(NSUInteger) bytesPerRow * h];
 }
 
+// The shaderpack runtime: a render target's mip chain from its level 0 (Iris "colortexNMipmapEnabled").
+void mc_generate_mipmaps(Enc *enc, id<MTLTexture> texture) {
+	[blit(enc) generateMipmapsForTexture:texture];
+}
+
 void mc_blit_texture_to_texture(Enc *enc, id<MTLTexture> src, id<MTLTexture> dst, int mip, int dx, int dy, int sx, int sy, int w, int h) {
 	[blit(enc) copyFromTexture:src sourceSlice:0 sourceLevel:mip sourceOrigin:MTLOriginMake(sx, sy, 0) sourceSize:MTLSizeMake(w, h, 1)
 		toTexture:dst destinationSlice:0 destinationLevel:mip destinationOrigin:MTLOriginMake(dx, dy, 0)];
@@ -944,6 +969,11 @@ void mc_r_texture(Enc *enc, int index, id<MTLTexture> texture, id<MTLSamplerStat
 		[enc->render setVertexSamplerState:sampler atIndex:index];
 		[enc->render setFragmentSamplerState:sampler atIndex:index];
 	}
+}
+
+// Coordinates follow the GL row order established by the shared vertex-Y flip.
+void mc_r_viewport(Enc *enc, int x, int y, int w, int h) {
+	[enc->render setViewport:(MTLViewport) {x, y, w, h, 0, 1}];
 }
 
 void mc_r_scissor(Enc *enc, int x, int y, int w, int h) {

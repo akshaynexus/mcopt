@@ -43,6 +43,7 @@ jar {
 	// Apache-2.0 asks for LICENSE and NOTICE in every copy; LICENSES/ holds the other licences NOTICE refers to.
 	from(rootProject.file('LICENSE'))
 	from(rootProject.file('NOTICE'))
+	from(rootProject.file('LICENSE-IRIS-LGPL-3.0'))
 	from(rootProject.file('LICENSES')) { into 'LICENSES' }
 }
 

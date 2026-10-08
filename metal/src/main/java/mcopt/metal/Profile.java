@@ -38,25 +38,31 @@ public final class Profile {
 		if (applied) return;
 		applied = true;
 		applyFlags();
-		distantHorizons();
+		openGlOnlyMods();
 	}
 
 	/**
+	 * Mods that only work on OpenGL, so with one loaded mcopt.metal defaults to false: OpenGL, exactly as -Dmcopt.metal=false.
 	 * Distant Horizons casts the game's textures to OpenGL's (ClassCastException MetalTexture -> GlTexture in its Lightmap
-	 * mixin), so with DH loaded mcopt.metal defaults to false: OpenGL, exactly as -Dmcopt.metal=false. An explicit
-	 * mcopt.metal (command line or config/mcopt.properties, already applied above) wins.
+	 * mixin). Iris makes OpenGL calls of its own from RenderSystem.initRenderer on, and on Metal there is no GL context for
+	 * them (LWJGL aborts the JVM), unless it is the iris-mcopt fork, which declares "mcopt:metal" in its fabric.mod.json and
+	 * runs on Metal. An explicit mcopt.metal (command line or config/mcopt.properties, already applied above) wins.
 	 */
-	private static void distantHorizons() {
+	private static void openGlOnlyMods() {
 		if (System.getProperty("mcopt.metal") != null) return;
-		boolean dh;
-		try {
-			dh = net.fabricmc.loader.api.FabricLoader.getInstance().isModLoaded("distanthorizons");
-		} catch (Throwable t) {
+		for (String[] mod : new String[][] {{"distanthorizons", "Distant Horizons"}, {"iris", "Iris"}}) {
+			boolean loaded;
+			try {
+				var container = net.fabricmc.loader.api.FabricLoader.getInstance().getModContainer(mod[0]);
+				loaded = container.isPresent() && !container.get().getMetadata().containsCustomValue("mcopt:metal");
+			} catch (Throwable t) {
+				return;
+			}
+			if (!loaded) continue;
+			System.setProperty("mcopt.metal", "false");
+			System.out.println("[mcopt] mcopt: " + mod[1] + " detected, using OpenGL; mcopt's other optimizations stay on (-Dmcopt.metal=true overrides)");
 			return;
 		}
-		if (!dh) return;
-		System.setProperty("mcopt.metal", "false");
-		System.out.println("[mcopt] mcopt: Distant Horizons detected, using OpenGL; mcopt's other optimizations stay on (-Dmcopt.metal=true overrides)");
 	}
 
 	private static void applyFlags() {
